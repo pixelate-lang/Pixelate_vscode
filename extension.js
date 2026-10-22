@@ -12,303 +12,72 @@ function diagnostic(document, diagnostics, line, message) {
     ));
 }
 
-function validate(document) {
+
+// Validate the current object-oriented PXL syntax. This intentionally stays
+// lightweight: the runtime remains the authoritative parser, while the
+// extension catches common structural mistakes without rejecting valid
+// expressions that may be added to the language.
+function validateCurrent(document) {
     const diagnostics = [];
     let braceDepth = 0;
     let hasWindow = false;
-    const elementBlocks = [];
+    let hasRun = false;
+
+    const declaration = /^(?:window|label|par|button|textbox|textarea|rect|circle|triangle)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:window|label|par|button|textbox|textarea|rect|circle|triangle)\s*\{$/;
+    const triggerDeclaration = /^trigger\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*trigger\s*\(/;
+    const variableDeclaration = /^(?:int|short|long|float|double|bool|char|String)\s+[A-Za-z_][A-Za-z0-9_]*\s*=/;
+    const control = /^(?:if|while)\s*\(.*\)\s*\{$|^for\s*\(.*\)\s*\{$|^else(?:\s+if\s*\(.*\))?\s*\{$/;
+    const field = /^(text|placeholder|title|iconPath|width|height|x|y|font|fontSize|angle|radius|p1|p2|p3|background)\s*:/;
 
     for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
         const original = document.lineAt(lineNumber).text;
         const trimmed = original.trim();
-        const hasTrailingSemicolon = /;\s*$/.test(trimmed);
-        const hasTrailingComma = /,\s*$/.test(trimmed);
+        if (!trimmed || trimmed.startsWith('#')) continue;
+
         const line = trimmed.replace(/[;,]\s*$/, '').trim();
+        const hasSemicolon = /;\s*$/.test(trimmed);
 
-        if (line === '' || line.startsWith('#')) {
-            continue;
-        }
-
-        const isField =
-            /^(id|title|iconPath|text|placeholder|message|options|width|height|x|y|font|fontSize|angle|radius|p1|p2|p3|background)\s*:/.test(line);
-
-        // Fields inside blocks are comma-delimited, while executable
-        // statements and declarations remain semicolon-terminated. A final
-        // field may omit its comma immediately before the closing brace.
-        if (isField) {
-            if (elementBlocks.length > 0) {
-                elementBlocks[elementBlocks.length - 1].properties.add(
-                    line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:/)[1]
-                );
+        if (declaration.test(line)) {
+            hasWindow ||= line.startsWith('window ');
+        } else if (triggerDeclaration.test(line) || control.test(line)) {
+            // Structural headers are complete without semicolons.
+        } else if (field.test(line)) {
+            if (braceDepth === 0) {
+                diagnostic(document, diagnostics, lineNumber, 'Properties must be inside an object declaration.');
             }
-            let nextLine = '';
-            for (let next = lineNumber + 1; next < document.lineCount; next++) {
-                const candidate = document.lineAt(next).text.trim();
-                if (candidate !== '' && !candidate.startsWith('#')) {
-                    nextLine = candidate;
-                    break;
-                }
-            }
-
-            if (hasTrailingSemicolon || (nextLine !== '}' && !hasTrailingComma)) {
-                diagnostic(document, diagnostics, lineNumber, "Expected ',' after the field.");
-            }
-        }
-
-        // Keep block headers and for-loop clauses out of the statement check;
-        // their braces and internal semicolons are structural syntax.
-        const requiresSemicolon =
-            /^switch_view\s*\(.*\)\s*$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\+\+$/.test(line) ||
-            /^(int|short|long)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*-?\d+$/.test(line) ||
-            /^(float|double)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*-?\d+(?:\.\d+)?$/.test(line) ||
-            /^bool\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(true|false)$/.test(line) ||
-            /^char\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*'(?:\\.|[^'\\])'$/.test(line) ||
-            /^String\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*"(?:\\.|[^"\\])*"$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:-?\d+(?:\.\d+)?|true|false|'.'|"(?:\\.|[^"\\])*")$/.test(line) ||
-            /^update\s+[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*=/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\s*=/.test(line);
-
-        if (requiresSemicolon && !hasTrailingSemicolon) {
-            diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the statement.");
+        } else if (variableDeclaration.test(line)) {
+            if (!hasSemicolon) diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the declaration.");
+        } else if (/^[A-Za-z_][A-Za-z0-9_]*\.(add|remove)\s*\(.*\)$/.test(line)) {
+            if (!hasSemicolon) diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the statement.");
+        } else if (/^[A-Za-z_][A-Za-z0-9_]*\.run\s*\(\)$/.test(line)) {
+            hasRun = true;
+            if (!hasSemicolon) diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the statement.");
+        } else if (/^[A-Za-z_][A-Za-z0-9_]*\.update\s*\(\)$/.test(line)) {
+            if (!hasSemicolon) diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the statement.");
+        } else if (/^(?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*\s*=/.test(line) ||
+                   /^(?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*\s*(?:\+\+|--)$/.test(line) ||
+                   /^(?:print|println)\s*\(.*\)$/.test(line) ||
+                   /^(?:switch_view|add_view)\s*\(.*\)$/.test(line)) {
+            if (!hasSemicolon) diagnostic(document, diagnostics, lineNumber, "Expected ';' at the end of the statement.");
+        } else if (line.includes('{') && line.includes('}')) {
+            // Declarations, onclick blocks, and trigger bodies may be written
+            // on one line in valid PXL programs.
+        } else if (line !== '}' && !line.endsWith('{')) {
+            diagnostic(document, diagnostics, lineNumber, 'Unrecognized PXL statement.');
         }
 
         const withoutStrings = original.replace(/"(?:\\.|[^"\\])*"/g, '""');
         braceDepth += (withoutStrings.match(/{/g) || []).length;
         braceDepth -= (withoutStrings.match(/}/g) || []).length;
-
-        if (/^window\s*\{$/.test(line)) {
-            hasWindow = true;
-            continue;
-        }
-
-        if (/^script\s*\{$/.test(line)) {
-            continue;
-        }
-
-        const elementHeader = line.match(
-            /^(label|par|button|textbox|textarea|rect|circle|triangle)\s+[A-Za-z_][A-Za-z0-9_]*\s*\{$/
-        );
-        if (elementHeader) {
-            elementBlocks.push({ type: elementHeader[1], properties: new Set() });
-            continue;
-        }
-
-        const addElementHeader = line.match(
-            /^add\s+(label|par|button|textbox|textarea|rect|circle|triangle)\s+[A-Za-z_][A-Za-z0-9_]*\s*\{$/
-        );
-        if (addElementHeader) {
-            elementBlocks.push({ type: addElementHeader[1], properties: new Set() });
-            continue;
-        }
-
-        if (/^add\s+CLOSE_TRIGGER\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^onclick\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^switch_view\s*\(\s*(?:"(?:\\.|[^"\\])*"|[A-Za-z_][A-Za-z0-9_]*)(?:\s*,\s*destroy_window\s*=\s*(?:true|false))?\s*\)\s*$/.test(line)) {
-            continue;
-        }
-
-        if (/^else(?:\s+if\s*\(.*\))?\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^\}\s*else(?:\s+if\s*\(.*\))?\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^trigger\s*\(\s*mouseMove\s*\)\s*\{$/.test(line) ||
-            /^trigger\s*\(\s*onkey(ci)?\s*\(\s*"(?:space|esc|enter|shift|alt|up|down|left|right|tab|[^"\\])"\s*\)\s*\)\s*\{$/.test(line) ||
-            /^trigger\s*\(.*\)\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^(if|while)\s*\(.*\)\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^for\s*\(\s*(int|short|long|float|double)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*-?\d+(?:\.\d+)?\s*;\s*[A-Za-z_][A-Za-z0-9_]*\s*(==|!=|<=|>=|<|>)\s*(?:[A-Za-z_][A-Za-z0-9_]*|-?\d+(?:\.\d+)?)\s*;\s*[A-Za-z_][A-Za-z0-9_]*\+\+\s*\)\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\+\+;?$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\.(x|y|fontSize|radius|angle)\+\+;?$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\.(x|y|fontSize|radius|angle)--\s*;?$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*--\s*;?$/.test(line)) {
-            continue;
-        }
-
-        if (/^(int|short|long)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*-?\d+;?$/.test(line) ||
-            /^(float|double)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*-?\d+(?:\.\d+)?;?$/.test(line) ||
-            /^bool\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(true|false);?$/.test(line) ||
-            /^char\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*'(?:\\.|[^'\\])';?$/.test(line) ||
-            /^String\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*"(?:\\.|[^"\\])*";?$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:-?\d+(?:\.\d+)?|true|false|'.'|"(?:\\.|[^"\\])*");?$/.test(line)) {
-            continue;
-        }
-
-        if (line === '}') {
-            const element = elementBlocks.pop();
-            if (element && element.type === 'triangle') {
-                const hasPoints = ['p1', 'p2', 'p3'].some(
-                    point => element.properties.has(point)
-                );
-                const allPoints = ['p1', 'p2', 'p3'].every(
-                    point => element.properties.has(point)
-                );
-                if (hasPoints && !allPoints) {
-                    diagnostic(document, diagnostics, lineNumber,
-                        'Triangle elements must specify p1, p2, and p3 together.');
-                }
-                const hasX = element.properties.has('x');
-                const hasY = element.properties.has('y');
-                if (hasX !== hasY) {
-                    diagnostic(document, diagnostics, lineNumber,
-                        'Triangle elements must specify both x and y together.');
-                }
-            }
-            if (braceDepth < 0) {
-                diagnostic(document, diagnostics, lineNumber, 'Unexpected closing brace.');
-                braceDepth = 0;
-            }
-            continue;
-        }
-
-        if (/^update\s+[A-Za-z_][A-Za-z0-9_]*\s*\{$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\.(text|title|iconPath)\s*=\s*(?:f)?"(?:\\.|[^"\\])*"$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\.font\s*=\s*(DEFAULT|ARIAL|CALIBRI|CONSOLAS|COURIERNEW|TIMESNEWROMAN|TAHOMA|VERDANA)$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\.fontSize\s*=\s*[1-9]\d+$/.test(line) ||
-            /^[A-Za-z_][A-Za-z0-9_]*\.(x|y|width|height|fontSize|angle|radius)\s*=\s*(?:-?\d+|[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*[+-]\s*-?\d+)$/.test(line) ||
-            /^mouse\.shape\s*=\s*(ARROW|IBEAM|WAIT|CROSS|UPARROW|SIZE|ICON|SIZENWSE|SIZENESW|SIZEWE|SIZENS|SIZEALL|NO|HAND|APPSTARTING|HELP|PIN|PERSON)$/.test(line)) {
-            continue;
-        }
-
-        if (/^update\s+[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*=\s*"(?:\\.|[^"\\])*"$/.test(line)) {
-            continue;
-        }
-
-        if (/^update\s+[A-Za-z_][A-Za-z0-9_]*\.font\s*=\s*(DEFAULT|ARIAL|CALIBRI|CONSOLAS|COURIERNEW|TIMESNEWROMAN|TAHOMA|VERDANA)$/.test(line) ||
-            /^update\s+[A-Za-z_][A-Za-z0-9_]*\.(x|y|width|height|fontSize|angle|radius)\s*=\s*(?:-?\d+|[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?\s*[+-]\s*-?\d+)$/.test(line)) {
-            continue;
-        }
-
-        if (/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\s*=\s*f"(?:\\.|[^"\\])*"$/.test(line)) {
-            continue;
-        }
-
-        if (/^update\s+[A-Za-z_][A-Za-z0-9_]*\.background\s*=\s*-?\d+\s+-?\d+\s+-?\d+$/.test(line)) {
-            const values = line.match(/-?\d+/g).slice(-3).map(Number);
-
-            if (values.some(value => value < 0 || value > 255)) {
-                diagnostic(
-                    document,
-                    diagnostics,
-                    lineNumber,
-                    'Background color channels must be between 0 and 255.'
-                );
-            }
-            continue;
-        }
-
-        if (/^update\s+mouse\.shape\s*=\s*(ARROW|IBEAM|WAIT|CROSS|UPARROW|SIZE|ICON|SIZENWSE|SIZENESW|SIZEWE|SIZENS|SIZEALL|NO|HAND|APPSTARTING|HELP|PIN|PERSON)$/.test(line)) {
-            continue;
-        }
-
-        if (/^update\s+[A-Za-z_][A-Za-z0-9_]*\.background\s*=\s*-?\d+\s+-?\d+\s+-?\d+$/.test(line)) {
-            const values = line.match(/-?\d+/g).slice(-3).map(Number);
-
-            if (values.some(value => value < 0 || value > 255)) {
-                diagnostic(
-                    document,
-                    diagnostics,
-                    lineNumber,
-                    'Background color channels must be between 0 and 255.'
-                );
-            }
-            continue;
-        }
-
-        if (/^(id|title|iconPath|text|placeholder|message)\s*:\s*(?:f)?"(?:\\.|[^"\\])*"$/.test(line)) {
-            continue;
-        }
-
-        if (/^font\s*:\s*(DEFAULT|ARIAL|CALIBRI|CONSOLAS|COURIERNEW|TIMESNEWROMAN|TAHOMA|VERDANA)$/.test(line) ||
-            /^fontSize\s*:\s*[1-9]\d*$/.test(line) ||
-            /^(angle|radius)\s*:\s*-?\d+$/.test(line) ||
-            /^p[123]\s*:\s*\(\s*-?\d+\s*,\s*-?\d+\s*\)$/.test(line)) {
-            continue;
-        }
-
-        if (/^options\s*:\s*YESNO$/.test(line)) {
-            continue;
-        }
-
-        if (/^(width|height|x|y)\s*:\s*-?\d+$/.test(line)) {
-            continue;
-        }
-
-        if (/^background\s*:\s*-?\d+\s+-?\d+\s+-?\d+$/.test(line)) {
-            const values = line.match(/-?\d+/g).map(Number);
-
-            if (values.some(value => value < 0 || value > 255)) {
-                diagnostic(
-                    document,
-                    diagnostics,
-                    lineNumber,
-                    'Background color channels must be between 0 and 255.'
-                );
-            }
-            continue;
-        }
-
-        if (/^(id|title|iconPath|text|placeholder|message|options|width|height|x|y|font|fontSize|angle|radius|p1|p2|p3|background)\b/.test(line)) {
-            diagnostic(
-                document,
-                diagnostics,
-                lineNumber,
-                'Invalid property value or missing colon.'
-            );
-            continue;
-        }
-
-        diagnostic(document, diagnostics, lineNumber, 'Unrecognized PXL statement.');
-    }
-
-    if (!hasWindow) {
-        diagnostic(document, diagnostics, 0, 'A window block is required.');
-    }
-
-    if (braceDepth > 0) {
-        const lastLine = Math.max(document.lineCount - 1, 0);
-        diagnostic(document, diagnostics, lastLine, 'Missing closing brace.');
-    }
-
-    for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
-        const text = document.lineAt(lineNumber).text;
-        const quoteCount = (text.match(/(?<!\\)"/g) || []).length;
-
-        if (quoteCount % 2 !== 0) {
-            diagnostic(document, diagnostics, lineNumber, 'Unterminated string.');
+        if (braceDepth < 0) {
+            diagnostic(document, diagnostics, lineNumber, 'Unexpected closing brace.');
+            braceDepth = 0;
         }
     }
 
+    if (!hasWindow) diagnostic(document, diagnostics, 0, 'A window declaration is required.');
+    if (hasWindow && !hasRun) diagnostic(document, diagnostics, 0, 'Select a window with windowName.run();');
+    if (braceDepth > 0) diagnostic(document, diagnostics, Math.max(document.lineCount - 1, 0), 'Missing closing brace.');
     return diagnostics;
 }
 
@@ -417,7 +186,7 @@ function loadDocumentation(context) {
 function findWidgetDocumentation(document, word) {
     const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pattern = new RegExp(
-        `^\\s*(?:add\\s+)?(label|par|button|textbox|textarea|rect|circle|triangle)\\s+${escapedWord}\\s*\\{`
+        `^\\s*(label|par|button|textbox|textarea|rect|circle|triangle)\\s+${escapedWord}\\s*=\\s*\\1\\s*\\{`
     );
 
     const lines = document.getText().split(/\r?\n/);
@@ -576,7 +345,7 @@ function activate(context) {
 
     function refresh(document) {
         if (document.languageId === 'pxl') {
-            diagnostics.set(document.uri, validate(document));
+            diagnostics.set(document.uri, validateCurrent(document));
         }
     }
 

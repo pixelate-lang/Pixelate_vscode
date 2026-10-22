@@ -1,30 +1,46 @@
 ---
 id: window
 name: Window
-kind: block
+kind: type
 ---
-Defines the application window and its configuration.
+Constructs a window object. Give it a name and select it explicitly with
+`windowName.run()`.
+
+### Fields:
+ - the declaration name identifies the window object.
+ - `title`: the window title.
+ - `background`: RGB for the background color formatted as: `R G B`.
+ - `width`: an integer value to determine the width of the window.
+ - `height`: an integer value to determine the height of the window.
 
 ---
-id: id
-name: ID
-kind: property
+id: window.add
+name: Window add
+kind: method
 ---
-Gives a window a unique string identifier. Required when a file contains multiple windows. The window with id `main` opens first.
+Adds a declared widget object to a window: `my_window.add(my_label);`.
 
 ---
-id: script
-name: Script
-kind: block
+id: window.remove
+name: Window remove
+kind: method
 ---
-Contains commands that create and configure UI elements.
+Removes a declared widget or trigger from a window: `my_window.remove(my_label);`.
+The object declaration remains available, so the same object can be added again.
+
+---
+id: window.run
+name: Window run
+kind: method
+---
+Selects a window as the program entry point: `my_window.run();`.
 
 ---
 id: add
 name: Add
-kind: command
+kind: method
 ---
-Adds a label, par, button, textbox, textarea, `rect`, `circle`, `triangle`, or `CLOSE_TRIGGER` to the application.
+Declare widgets as objects, then add them with `windowName.add(widgetName)`.
 
 ---
 id: label
@@ -98,10 +114,20 @@ Defines actions that run when a button is clicked.
 
 ---
 id: update
-name: Update
-kind: command
+name: Window Update
+kind: method
 ---
-Updates a widget or window property. Example: `update greeting.text = "Hello"`.
+Updates widget or window properties.
+
+Example:
+~~~pxl
+greeting.text = "Hello";
+greeting.font = ARIAL;
+my_window.update();
+~~~
+
+Assignments change widget state in memory. Call `my_window.update()` to redraw
+the window and commit the changes to the screen.
 
 ---
 id: title
@@ -209,34 +235,12 @@ kind: property
 Sets an RGB background color. Each channel must be between 0 and 255.
 
 ---
-id: CLOSE_TRIGGER
+id: closeTrigger
 name: Close Trigger
-kind: command
+kind: trigger
 ---
-Adds an optional Yes/No confirmation dialog when the window closes.
+Runs the trigger body when the attached window receives a close request.
 
----
-id: message
-name: Message
-kind: property
----
-Sets the close-confirmation message.
-
----
-id: options
-name: Options
-kind: property
----
-Sets close-confirmation options. The currently supported value is `YESNO`.
-
----
-id: YESNO
-name: Yes/No
-kind: constant
----
-Displays Yes and No buttons in a close-confirmation dialog.
-
----
 id: int
 name: Integer
 kind: type
@@ -316,33 +320,39 @@ Repeats a block using a numeric initializer, condition, and `++` increment.
 ---
 id: switch_view
 name: Switch View
-kind: command
+kind: statement
 ---
-Opens another identified window. The current window is destroyed by default. Use `switch_view("settings", destroy_window = false);` to keep it open.
+Switches to the named window and destroys the current window.
 
-Example: `switch_view("settings");`
+Example: `switch_view(settings);`
 
 ---
-id: destroy_window
-name: Destroy Window
-kind: argument
+id: add_view
+name: Add View
+kind: statement
 ---
-Optional `switch_view` argument. Set it to `false` to keep the current window open while opening the destination window.
+Switches to the named window while keeping the current window open.
+
+Example: `add_view(settings);`
 
 ---
 id: trigger
 name: Trigger
-kind: statement
+kind: type
 ---
-Runs a block when a condition becomes true, when `mouseMove` occurs, or when `onkey("a")`/`onkeyci("a")` receives a key.
+Create a named trigger object, then attach it to a window with `window.add(trigger)`.
+
+Example: `trigger refresh = trigger (score == 10) { ... }`
 
 ## Special Triggers
 
-Setting `trigger(mouseMove){}` is a special trigger that runs every time a mouse movement is detected.
+Condition triggers run every time their condition is true while attached to a
+window. `mouseMove` and `onkey("a")` remain available as event conditions.
 
 To set keyboard triggers:
 
-`trigger(onkey("a"))/trigger(onkey("a"))` runs every time the key is pressed.
+`trigger key = trigger(onkey("a")) { ... }` runs every time the key is pressed.
+`trigger close = trigger(closeTrigger) { ... }` runs when the window closes.
 
 ---
 id: onkey

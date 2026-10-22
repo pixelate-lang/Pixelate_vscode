@@ -15,29 +15,31 @@ The extension recognizes:
 - Named keys: `space`, `esc`, `enter`, `shift`, `alt`, `up`, `down`, `left`, `right`, and `tab`.
 - `!`, `&&`, `||`, comparisons, and parentheses in `if`, `while`, and condition triggers.
 - Increment/decrement expressions such as `count++`, `circle.radius++`, `marker.x++`, and `marker.angle--`.
+- Named object declarations with explicit window composition through `add` and `remove`.
+- Explicit window startup with `windowName.run()` and redraws with `windowName.update()`.
 
 Example:
 
 ```pxl
-window {
+window main = window {
     title: "Shape demo",
-    triangle marker {
-        p1: (200, 80),
-        p2: (260, 180),
-        p3: (140, 180),
-        angle: 15,
-    }
 }
 
-script {
-    trigger(onkey("right")) {
-        marker.x++;
-    }
-
-    trigger(onkey("space")) {
-        update marker.angle = 45;
-    }
+triangle marker = triangle {
+    p1: (200, 80),
+    p2: (260, 180),
+    p3: (140, 180),
+    angle: 15,
 }
+
+trigger rotate = trigger(onkey("right")) {
+    marker.x++;
+    main.update();
+}
+
+main.add(marker);
+main.add(rotate);
+main.run();
 ```
 
 Open a `.pxl` file and use the play button in the editor title bar or the

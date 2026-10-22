@@ -6,8 +6,9 @@
         { "include": "#comments" },
         { "include": "#formatted-strings" },
         { "include": "#strings" },
-        { "include": "#blocks" },
-        { "include": "#commands" },
+        { "include": "#declarations" },
+        { "include": "#methods" },
+        { "include": "#keywords" },
         { "include": "#element-types" },
         { "include": "#properties" },
         { "include": "#types" },
@@ -53,21 +54,29 @@
                 }
             ]
         },
-        "blocks": {
+        "declarations": {
             "name": "keyword.control.block.pxl",
-            "match": "\\b(window|script)\\b"
+            "match": "\\b(window|label|par|button|textbox|textarea|rect|circle|triangle|trigger)\\b"
         },
-        "commands": {
+        "methods": {
             "patterns": [
                 {
-                    "name": "keyword.control.command.pxl",
-                    "match": "\\b(add|update|switch_view|CLOSE_TRIGGER|if|else|while|for|trigger|mouse|onkey|onkeyci|mouseMove|rect|circle|triangle|angle|radius|p1|p2|p3)\\b"
+                    "name": "support.function.pxl",
+                    "match": "\\b(add|remove|update|run|switch_view|add_view|print|println)\\b(?=\\s*\\()"
+                },
+                {
+                    "name": "keyword.control.pxl",
+                    "match": "\\b(if|else|while|for)\\b"
                 },
                 {
                     "name": "keyword.control.event.pxl",
-                    "match": "\\bonclick\\b"
+                    "match": "\\b(onkey|onkeyci|mouseMove|closeTrigger)\\b"
                 }
             ]
+        },
+        "keywords": {
+            "name": "keyword.control.pxl",
+            "match": "\\b(trigger)\\b"
         },
         "element-types": {
             "name": "support.class.widget.pxl",
@@ -75,11 +84,11 @@
         },
         "properties": {
             "name": "entity.other.attribute-name.pxl",
-            "match": "\\b(id|title|width|height|background|iconPath|text|placeholder|x|y|font|fontSize|angle|radius|p1|p2|p3|message|options)\\b(?=\\s*:)"
+            "match": "\\b(title|width|height|background|iconPath|text|placeholder|x|y|font|fontSize|angle|radius|p1|p2|p3)\\b(?=\\s*:)"
         },
         "values": {
             "name": "constant.language.pxl",
-            "match": "\\b(YESNO|DEFAULT|ARIAL|CALIBRI|CONSOLAS|COURIERNEW|TIMESNEWROMAN|TAHOMA|VERDANA|ARROW|IBEAM|WAIT|CROSS|UPARROW|SIZE|ICON|SIZENWSE|SIZENESW|SIZEWE|SIZENS|SIZEALL|NO|HAND|APPSTARTING|HELP|PIN|PERSON)\\b"
+            "match": "\\b(DEFAULT|ARIAL|CALIBRI|CONSOLAS|COURIERNEW|TIMESNEWROMAN|TAHOMA|VERDANA|ARROW|IBEAM|WAIT|CROSS|UPARROW|SIZE|ICON|SIZENWSE|SIZENESW|SIZEWE|SIZENS|SIZEALL|NO|HAND|APPSTARTING|HELP|PIN|PERSON)\\b"
         },
         "types": {
             "name": "storage.type.pxl",
