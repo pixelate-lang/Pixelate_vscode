@@ -12,7 +12,6 @@ Constructs a window object. Give it a name and select it explicitly with
  - `background`: RGB for the background color formatted as: `R G B`.
  - `width`: an integer value to determine the width of the window.
  - `height`: an integer value to determine the height of the window.
-
 ---
 id: window.add
 name: Window add
@@ -117,7 +116,7 @@ id: update
 name: Window Update
 kind: method
 ---
-Updates widget or window properties.
+Updates widget or window properties. 
 
 Example:
 ~~~pxl
@@ -241,6 +240,7 @@ kind: trigger
 ---
 Runs the trigger body when the attached window receives a close request.
 
+---
 id: int
 name: Integer
 kind: type
